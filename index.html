@@ -1,0 +1,867 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FiveM 在庫・販売管理ツール</title>
+    <style>
+        :root {
+            --primary-color: #4CAF50; /* 緑 */
+            --danger-color: #f44336;  /* 赤 */
+            --info-color: #0d6efd;    /* 青 */
+            --warning-color: #fd7e14; /* オレンジ */
+            --bg-color: #f8f9fa;
+            --border-color: #dee2e6;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            display: flex;
+            height: 100vh;
+            background-color: var(--bg-color);
+        }
+        /* 左側のタブメニュー */
+        .sidebar { width: 260px; background-color: #343a40; color: white; padding: 20px 0; display: flex; flex-direction: column; }
+        .sidebar h2 { text-align: center; font-size: 16px; margin-bottom: 15px; margin-top: 0; }
+        .server-section { padding: 0 15px 20px 15px; border-bottom: 1px solid #495057; margin-bottom: 10px; }
+        .server-select { width: 100%; padding: 8px; border-radius: 4px; border: none; margin-bottom: 10px; font-weight: bold; cursor: pointer; }
+        .btn-secondary { width: 100%; background-color: #6c757d; font-size: 12px; padding: 6px; }
+        
+        .tab { padding: 15px 20px; cursor: pointer; transition: 0.3s; font-weight: bold; }
+        .tab:hover { background-color: #495057; }
+        .tab.active { background-color: #0d6efd; border-left: 5px solid #fff; }
+        .btn-add-tab { text-align: center; padding: 12px; cursor: pointer; color: #adb5bd; font-size: 13px; font-weight: bold; border-bottom: 1px solid #495057; }
+        .btn-add-tab:hover { color: white; background-color: #495057; }
+        
+        .settings { margin-top: auto; padding: 20px; background-color: #2b3035; border-top: 1px solid #1a1d20; }
+        .settings label { font-size: 12px; color: #adb5bd; font-weight: bold; }
+        .settings input { width: 100%; padding: 8px; margin-top: 5px; box-sizing: border-box; border-radius: 4px; border: none; background-color: #fff; color: #333; }
+        .btn-delete-server { margin-top: 15px; width: 100%; background-color: transparent; border: 1px solid #f44336; color: #f44336; font-size: 12px; padding: 6px; cursor: pointer; transition: 0.2s; border-radius: 4px; }
+        .btn-delete-server:hover { background-color: #f44336; color: white; }
+
+        /* 右側のメインコンテンツ */
+        .content { flex-grow: 1; padding: 30px; overflow-y: auto; }
+        .header-actions { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; background: white; padding: 15px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        
+        .category-tabs { display: flex; gap: 10px; flex-wrap: wrap; }
+        .category-tab { padding: 8px 16px; background-color: #fff; border: 1px solid var(--border-color); border-radius: 20px; cursor: pointer; font-size: 14px; font-weight: bold; color: #6c757d; transition: all 0.2s ease; }
+        .category-tab:hover { background-color: #f8f9fa; border-color: #adb5bd; }
+        .category-tab.active { background-color: #343a40; color: white; border-color: #343a40; }
+
+        button { padding: 8px 15px; cursor: pointer; border: none; border-radius: 4px; font-weight: bold; color: white; transition: 0.2s; }
+        button:hover { opacity: 0.8; }
+        
+        /* ボタン類 */
+        .btn-add { background-color: var(--info-color); }
+        .btn-link { background-color: #ff9800; font-size: 16px; padding: 10px 20px; transition: 0.3s;}
+        .btn-restore { background-color: #17a2b8; font-size: 16px; padding: 10px 20px; transition: 0.3s; box-shadow: 0 2px 5px rgba(0,0,0,0.2);}
+        
+        .btn-action.green { background-color: var(--primary-color); }
+        .btn-action.red { background-color: var(--danger-color); }
+        .btn-action.blue { background-color: var(--info-color); }
+        .btn-action.orange { background-color: var(--warning-color); }
+        
+        .btn-report { background-color: #6f42c1; font-size: 13px; }
+        .btn-delete-item { background-color: transparent; color: #f44336; font-size: 18px; padding: 5px; border: none; cursor: pointer; transition: transform 0.2s; }
+        .btn-delete-item:hover { transform: scale(1.2); opacity: 1; }
+        .btn-delete-tab { background-color: transparent; color: #6c757d; border: 1px solid #ccc; font-size: 12px; padding: 4px 8px; }
+        .btn-delete-tab:hover { background-color: #f44336; color: white; border-color: #f44336; }
+
+        table { width: 100%; border-collapse: collapse; background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border-radius: 8px; overflow: hidden; }
+        th, td { padding: 15px; text-align: left; border-bottom: 1px solid var(--border-color); }
+        th { background-color: #e9ecef; }
+        .input-number, .price-input { padding: 5px; text-align: right; border: 1px solid #ccc; border-radius: 3px; }
+        .input-number { width: 80px; }
+        .price-input { width: 90px; }
+        .category-select { padding: 5px; border: none; background-color: transparent; font-size: 14px; cursor: pointer; color: #333; font-weight: bold; }
+        #file-status { font-weight: bold; margin-top: 10px; color: #d32f2f; }
+        .status-ok { color: #2e7d32 !important; }
+
+        /* タブ追加用のモーダル */
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); justify-content: center; align-items: center; z-index: 1000; }
+        .modal-content { background: white; padding: 25px; border-radius: 8px; width: 320px; box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
+        .modal-content label { display: block; margin-top: 15px; font-size: 13px; font-weight: bold; color: #333; }
+        .modal-content input, .modal-content select { width: 100%; padding: 8px; margin-top: 5px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; }
+    </style>
+</head>
+<body>
+
+    <div id="tab-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h3 style="margin-top:0; color: #0d6efd;">✨ 新しいタブを作成</h3>
+            <label>📌 タブの名前 (例: 消費, 廃棄, 移動)</label>
+            <input type="text" id="new-tab-name" placeholder="消費">
+            <label>🔣 アイコン (絵文字1文字)</label>
+            <input type="text" id="new-tab-icon" placeholder="💡" maxlength="2">
+            <label>🔽 実行時の在庫の変動</label>
+            <select id="new-tab-operation">
+                <option value="sub">在庫を減らす (-)</option>
+                <option value="add">在庫を増やす (+)</option>
+            </select>
+            <label>🎨 実行ボタンの色</label>
+            <select id="new-tab-color">
+                <option value="orange">オレンジ色</option>
+                <option value="blue">青色</option>
+                <option value="green">緑色</option>
+                <option value="red">赤色</option>
+            </select>
+            <div style="margin-top:25px; display:flex; justify-content:flex-end; gap:10px;">
+                <button class="btn-secondary" onclick="closeTabModal()" style="width:auto;">キャンセル</button>
+                <button class="btn-add" onclick="saveNewTab()" style="width:auto;">作成する</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 左側のメニュー -->
+    <div class="sidebar">
+        <h2>🌐 サーバー選択</h2>
+        <div class="server-section">
+            <select id="server-select" class="server-select" onchange="changeServer()"></select>
+            <button class="btn-secondary" onclick="addServer()">+ 新しいサーバーを追加</button>
+        </div>
+
+        <div id="sidebar-tabs"></div>
+        <div class="btn-add-tab" onclick="openTabModal()">＋ 新しいタブを追加</div>
+        
+        <div class="settings">
+            <label id="server-settings-title" style="font-size: 14px; color: #fff;">⚙️ サーバー設定</label><br>
+            <label style="margin-top: 15px; display:inline-block;">📝 サーバー名</label>
+            <input type="text" id="server-name-input" placeholder="サーバー名" onchange="renameServer()">
+            <label style="margin-top: 10px; display:inline-block;">🔗 Discord Webhook URL</label>
+            <input type="password" id="webhook-url" placeholder="https://discord.com/api/webhooks/..." onchange="saveWebhook()">
+            <button class="btn-delete-server" onclick="deleteServer()">🗑️ 現在のサーバーを削除</button>
+        </div>
+    </div>
+
+    <!-- 右側のコンテンツ -->
+    <div class="content">
+        <!-- 【進化】ファイル連携エリアの構造を変更 -->
+        <div class="header-actions" style="flex-direction: column; align-items: flex-start;">
+            <div style="display: flex; justify-content: space-between; width: 100%; align-items: flex-start;">
+                <div>
+                    <!-- 復元ボタンと新規選択ボタンを並べる -->
+                    <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 5px;">
+                        <button id="btn-restore-file" class="btn-restore" style="display:none;" onclick="restoreJSONFile()">🔄 前回のファイルを復元</button>
+                        <button id="btn-link-file" class="btn-link" onclick="linkJSONFile()">📂 管理するJSONファイルを選択</button>
+                    </div>
+                    <div id="file-status">⚠️ サーバーを切り替えたため、対象のJSONファイルを選択してください。</div>
+                </div>
+                <button class="btn-add" onclick="addNewItem()">+ 新規アイテム追加</button>
+            </div>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 15px;">
+            <h1 id="mode-title" style="margin: 0;">📦 仕入モード</h1>
+            <button class="btn-delete-tab" onclick="deleteCurrentTab()">🗑️ このタブを削除</button>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <div class="category-tabs" id="category-tabs"></div>
+            
+            <div style="display: flex; align-items: center; gap: 15px;">
+                <div id="bulk-total-display" style="font-size: 16px; font-weight: bold; color: var(--info-color); background: #e9ecef; padding: 8px 15px; border-radius: 20px; display: none; border: 1px solid var(--border-color);">
+                    合計: 0円
+                </div>
+                <button id="btn-bulk-action" class="btn-action green" onclick="executeBulkAction()">✅ 入力したものを まとめて実行</button>
+                <button class="btn-report" onclick="sendCategoryReport()">📊 カテゴリ別在庫をDiscordへ送信</button>
+            </div>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>カテゴリ</th>
+                    <th>アイテム名</th>
+                    <th>参考URL / 画像</th>
+                    <th>設定価格 (円)</th>
+                    <th>現在の在庫数</th>
+                    <th>個数入力</th>
+                    <th>合計金額</th>
+                    <th>個別実行</th>
+                    <th style="text-align: center;">削除</th>
+                </tr>
+            </thead>
+            <tbody id="item-list">
+                <tr><td colspan="9" style="text-align:center;">上のボタンから、このサーバーの管理用JSONファイルを選択してください。</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        let menuTabs =[];
+        let currentMode = null;
+        let inventory =[];
+        
+        let fileHandle = null;      // 実際に現在使っているファイルのアクセス権
+        let savedFileHandle = null; // データベースに記憶されている過去のアクセス権
+
+        const CATEGORIES =["素材", "武器", "食べ物", "日用品", "その他", "URL"];
+        let currentCategory = "すべて";
+
+        let servers =[];
+        let currentServerId = null;
+
+        // ==========================================
+        // 💾 IndexedDB (ブラウザ内部データベース) 処理
+        // 前回のファイルの場所を記録するための裏ワザ機能
+        // ==========================================
+        const DB_NAME = 'FiveM_Tool_DB';
+        const STORE_NAME = 'file_handles';
+
+        function getDB() {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open(DB_NAME, 1);
+                request.onupgradeneeded = (e) => { e.target.result.createObjectStore(STORE_NAME); };
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = () => reject(request.error);
+            });
+        }
+
+        async function saveFileHandleDB(serverId, handle) {
+            const db = await getDB();
+            return new Promise((resolve, reject) => {
+                const tx = db.transaction(STORE_NAME, 'readwrite');
+                tx.objectStore(STORE_NAME).put(handle, serverId);
+                tx.oncomplete = resolve;
+                tx.onerror = reject;
+            });
+        }
+
+        async function getFileHandleDB(serverId) {
+            const db = await getDB();
+            return new Promise((resolve, reject) => {
+                const tx = db.transaction(STORE_NAME, 'readonly');
+                const req = tx.objectStore(STORE_NAME).get(serverId);
+                req.onsuccess = () => resolve(req.result);
+                req.onerror = () => reject(req.error);
+            });
+        }
+
+        async function deleteFileHandleDB(serverId) {
+            const db = await getDB();
+            return new Promise((resolve, reject) => {
+                const tx = db.transaction(STORE_NAME, 'readwrite');
+                tx.objectStore(STORE_NAME).delete(serverId);
+                tx.oncomplete = resolve;
+                tx.onerror = reject;
+            });
+        }
+        // ==========================================
+
+        window.onload = async function() {
+            loadServers();
+            loadTabs();
+            renderCategoryTabs();
+            
+            // 開いた瞬間に、前回のファイル記憶があるか探す
+            await checkSavedFile();
+            renderTable();
+        };
+
+        // 【新機能】保存されたファイル権限があるかチェックし、UIを切り替える
+        async function checkSavedFile() {
+            try {
+                savedFileHandle = await getFileHandleDB(currentServerId);
+                const btnRestore = document.getElementById('btn-restore-file');
+                const btnLink = document.getElementById('btn-link-file');
+                const status = document.getElementById('file-status');
+                
+                if (savedFileHandle && !fileHandle) {
+                    // 記憶が見つかった場合（復元ボタンをドーンと出す）
+                    btnRestore.style.display = 'inline-block';
+                    btnRestore.innerText = `🔄 前回のファイルを復元 (${savedFileHandle.name})`;
+                    
+                    // 新規選択ボタンは小さくする
+                    btnLink.innerText = `📂 別のJSONを選ぶ`;
+                    btnLink.style.backgroundColor = '#6c757d'; 
+                    btnLink.style.fontSize = '12px';
+                    btnLink.style.padding = '8px 12px';
+                    
+                    status.innerText = `⚠️ 復元ボタンを押してファイルへのアクセスを許可してください。`;
+                    status.classList.remove('status-ok');
+                    status.style.color = "#d32f2f";
+                } else if (!fileHandle) {
+                    // 何も記憶がない場合
+                    btnRestore.style.display = 'none';
+                    btnLink.innerText = `📂 管理するJSONファイルを選択`;
+                    btnLink.style.backgroundColor = '#ff9800';
+                    btnLink.style.fontSize = '16px';
+                    btnLink.style.padding = '10px 20px';
+                    
+                    status.innerText = `⚠️ サーバーを切り替えたため、対象のJSONファイルを選択してください。`;
+                    status.classList.remove('status-ok');
+                    status.style.color = "#d32f2f";
+                }
+            } catch(e) {
+                console.error("記憶の読み込みエラー", e);
+            }
+        }
+
+        // 【新機能】復元ボタンが押された時の処理（ワンクリック復旧）
+        async function restoreJSONFile() {
+            if (!savedFileHandle) return;
+            try {
+                // ブラウザに「このファイルを操作してもいい？」と権限を要求する（ポップアップが出る）
+                const opts = { mode: 'readwrite' };
+                let hasPerm = false;
+                
+                if ((await savedFileHandle.queryPermission(opts)) === 'granted') {
+                    hasPerm = true;
+                } else if ((await savedFileHandle.requestPermission(opts)) === 'granted') {
+                    hasPerm = true;
+                }
+
+                if (!hasPerm) {
+                    return alert("ファイルへのアクセスが許可されませんでした。");
+                }
+                
+                // 許可されたら、記憶していたファイルを開く！
+                fileHandle = savedFileHandle;
+                const file = await fileHandle.getFile();
+                const contents = await file.text();
+                
+                if (!contents.trim()) inventory =[];
+                else inventory = JSON.parse(contents).map(item => ({ ...item, category: item.category || "その他" }));
+
+                updateFileLinkedUI(file.name);
+                renderTable();
+                
+            } catch(e) {
+                console.error(e);
+                alert("ファイルの復元に失敗しました。ファイルが移動または削除された可能性があります。\n新しくファイルを選び直してください。");
+                deleteFileHandleDB(currentServerId);
+                checkSavedFile();
+            }
+        }
+
+        // ファイル連携成功時にボタンの見た目を「連携中(緑)」に変える処理
+        function updateFileLinkedUI(filename) {
+            document.getElementById('btn-restore-file').style.display = 'none';
+            
+            const btnLink = document.getElementById('btn-link-file');
+            btnLink.innerText = `📁 連携中: ${filename}`;
+            btnLink.style.backgroundColor = 'var(--primary-color)';
+            btnLink.style.fontSize = '14px';
+            btnLink.style.padding = '8px 15px';
+            
+            const status = document.getElementById('file-status');
+            status.innerText = `✅ 変更は自動的に ${filename} に上書き保存されます。`;
+            status.classList.add('status-ok');
+            status.style.color = "";
+        }
+
+        // 完全に新しくファイルを選び直す処理
+        async function linkJSONFile() {
+            try {
+                const [handle] = await window.showOpenFilePicker({
+                    types:[{ description: 'JSON Files', accept: { 'application/json': ['.json'] } }],
+                    multiple: false
+                });
+
+                fileHandle = handle;
+                
+                // ★選んだファイルの場所を内部データベースに記憶させる★
+                await saveFileHandleDB(currentServerId, fileHandle);
+
+                const file = await fileHandle.getFile();
+                const contents = await file.text();
+                
+                if (!contents.trim()) inventory =[];
+                else inventory = JSON.parse(contents).map(item => ({ ...item, category: item.category || "その他" }));
+
+                updateFileLinkedUI(file.name);
+                renderTable();
+            } catch (error) { console.error("ファイル選択エラー:", error); }
+        }
+
+        async function saveDataToFile() {
+            if (!fileHandle) return;
+            try {
+                const writable = await fileHandle.createWritable();
+                await writable.write(JSON.stringify(inventory, null, 2));
+                await writable.close();
+            } catch (error) { alert("ファイルの保存に失敗しました。"); }
+        }
+
+
+        // ----- 以下、既存のシステム（タブ・サーバー・テーブル）の処理 -----
+
+        function loadTabs() {
+            const savedTabs = localStorage.getItem('fivem_menu_tabs');
+            if (savedTabs) {
+                menuTabs = JSON.parse(savedTabs);
+            } else {
+                menuTabs =[
+                    { id: 'tab_buy', icon: '📦', label: '仕入 (在庫を増やす)', title: '📦 仕入モード (在庫追加)', btnText: '仕入れる', actionText: '仕入(追加)', operation: 'add', btnClass: 'green' },
+                    { id: 'tab_sell', icon: '💰', label: '売却 (在庫を減らす)', title: '💰 売却モード (在庫減少)', btnText: '売却する', actionText: '売却(減少)', operation: 'sub', btnClass: 'red' }
+                ];
+                saveTabs();
+            }
+            if (!currentMode || !menuTabs.find(m => m.id === currentMode)) {
+                currentMode = menuTabs[0].id;
+            }
+            renderSidebarTabs();
+            setMode(currentMode);
+        }
+
+        function saveTabs() { localStorage.setItem('fivem_menu_tabs', JSON.stringify(menuTabs)); }
+
+        function renderSidebarTabs() {
+            const container = document.getElementById('sidebar-tabs');
+            container.innerHTML = '';
+            menuTabs.forEach(tab => {
+                const div = document.createElement('div');
+                div.className = `tab ${currentMode === tab.id ? 'active' : ''}`;
+                div.innerText = `${tab.icon} ${tab.label}`;
+                div.onclick = () => setMode(tab.id);
+                container.appendChild(div);
+            });
+        }
+
+        function openTabModal() {
+            document.getElementById('tab-modal').style.display = 'flex';
+            document.getElementById('new-tab-name').value = '';
+            document.getElementById('new-tab-icon').value = '💡';
+        }
+
+        function closeTabModal() { document.getElementById('tab-modal').style.display = 'none'; }
+
+        function saveNewTab() {
+            const name = document.getElementById('new-tab-name').value.trim();
+            const icon = document.getElementById('new-tab-icon').value.trim() || '💡';
+            const operation = document.getElementById('new-tab-operation').value;
+            const color = document.getElementById('new-tab-color').value;
+
+            if (!name) return alert("タブの名前を入力してください！");
+
+            const actionType = operation === 'add' ? '追加' : '減少';
+            const actionVerb = operation === 'add' ? '増やす' : '減らす';
+
+            const newTab = {
+                id: 'tab_' + Date.now(),
+                icon: icon, label: `${name} (在庫を${actionVerb})`, title: `${icon} ${name}モード (在庫${actionType})`,
+                btnText: `${name}する`, actionText: `${name}(${actionType})`, operation: operation, btnClass: color
+            };
+
+            menuTabs.push(newTab);
+            saveTabs();
+            closeTabModal();
+            setMode(newTab.id);
+        }
+
+        function deleteCurrentTab() {
+            if (menuTabs.length <= 1) return alert("タブが1つしかないため削除できません！");
+            const currentTabDef = menuTabs.find(m => m.id === currentMode);
+            if (confirm(`本当にアクションタブ「${currentTabDef.label}」を削除しますか？`)) {
+                menuTabs = menuTabs.filter(m => m.id !== currentMode);
+                saveTabs();
+                setMode(menuTabs[0].id);
+            }
+        }
+
+        function setMode(modeId) {
+            currentMode = modeId;
+            renderSidebarTabs();
+            
+            const modeDef = menuTabs.find(m => m.id === modeId);
+            if(modeDef) {
+                document.getElementById('mode-title').innerHTML = modeDef.title;
+                renderTable();
+            }
+        }
+
+        function loadServers() {
+            const savedServers = localStorage.getItem('fivem_servers');
+            if (savedServers) {
+                servers = JSON.parse(savedServers);
+                currentServerId = localStorage.getItem('fivem_current_server') || servers[0].id;
+            } else {
+                const oldWebhook = localStorage.getItem('fivem_webhook') || "";
+                servers =[{ id: 'srv_main', name: "メインサーバー", webhook: oldWebhook }];
+                currentServerId = 'srv_main';
+                saveServers();
+            }
+            renderServerSelect();
+            applyCurrentServerSettings();
+        }
+
+        function saveServers() {
+            localStorage.setItem('fivem_servers', JSON.stringify(servers));
+            localStorage.setItem('fivem_current_server', currentServerId);
+        }
+
+        function renderServerSelect() {
+            const select = document.getElementById('server-select');
+            select.innerHTML = '';
+            servers.forEach(srv => {
+                const opt = document.createElement('option');
+                opt.value = srv.id;
+                opt.textContent = srv.name;
+                if (srv.id === currentServerId) opt.selected = true;
+                select.appendChild(opt);
+            });
+        }
+
+        async function changeServer() {
+            currentServerId = document.getElementById('server-select').value;
+            saveServers();
+            fileHandle = null;
+            inventory =[];
+            
+            // サーバーを切り替えたら、そのサーバーの記憶を探す
+            await checkSavedFile();
+            
+            applyCurrentServerSettings();
+            renderTable();
+        }
+
+        function addServer() {
+            const name = prompt("追加するサーバーの名前を入力してください");
+            if (!name) return;
+            const newId = 'srv_' + Date.now();
+            servers.push({ id: newId, name: name, webhook: "" });
+            currentServerId = newId;
+            saveServers();
+            renderServerSelect();
+            changeServer();
+        }
+
+        function renameServer() {
+            const currentServer = servers.find(s => s.id === currentServerId);
+            const newName = document.getElementById('server-name-input').value;
+            if (currentServer && newName.trim() !== "") {
+                currentServer.name = newName;
+                saveServers();
+                renderServerSelect();
+                document.getElementById('server-settings-title').textContent = `⚙️ ${newName} の設定`;
+            }
+        }
+
+        function deleteServer() {
+            if (servers.length <= 1) return alert("サーバーが1つしかないため削除できません！");
+            if (confirm(`本当に現在のサーバーを削除しますか？`)) {
+                // データベースからもサーバーの記憶を消す
+                deleteFileHandleDB(currentServerId);
+                
+                servers = servers.filter(s => s.id !== currentServerId);
+                currentServerId = servers[0].id;
+                saveServers();
+                renderServerSelect();
+                changeServer();
+            }
+        }
+
+        function applyCurrentServerSettings() {
+            const currentServer = servers.find(s => s.id === currentServerId);
+            if (currentServer) {
+                document.getElementById('server-name-input').value = currentServer.name;
+                document.getElementById('webhook-url').value = currentServer.webhook;
+                document.getElementById('server-settings-title').textContent = `⚙️ ${currentServer.name} の設定`;
+            }
+        }
+
+        function saveWebhook() {
+            const currentServer = servers.find(s => s.id === currentServerId);
+            if (currentServer) {
+                currentServer.webhook = document.getElementById('webhook-url').value;
+                saveServers();
+            }
+        }
+
+        function renderCategoryTabs() {
+            const container = document.getElementById('category-tabs');
+            let html = `<div class="category-tab ${currentCategory === 'すべて' ? 'active' : ''}" onclick="setCategory('すべて')">すべて</div>`;
+            CATEGORIES.forEach(cat => {
+                html += `<div class="category-tab ${currentCategory === cat ? 'active' : ''}" onclick="setCategory('${cat}')">${cat}</div>`;
+            });
+            container.innerHTML = html;
+        }
+
+        function setCategory(cat) {
+            currentCategory = cat;
+            renderCategoryTabs();
+            renderTable();
+        }
+
+        function updateBulkTotal() {
+            let totalAllAmount = 0;
+            let hasInput = false;
+
+            inventory.forEach((item, index) => {
+                const input = document.getElementById(`qty-${index}`);
+                if (input) {
+                    const qty = Number(String(input.value).replace(/,/g, ''));
+                    if (!isNaN(qty) && qty > 0) {
+                        totalAllAmount += (item.price * qty);
+                        hasInput = true;
+                    }
+                }
+            });
+
+            const displayElement = document.getElementById('bulk-total-display');
+            if (hasInput) {
+                displayElement.style.display = 'block';
+                displayElement.innerText = `合計: ${totalAllAmount.toLocaleString()}円`;
+            } else {
+                displayElement.style.display = 'none';
+            }
+        }
+
+        function renderTable() {
+            const tbody = document.getElementById('item-list');
+            const modeDef = menuTabs.find(m => m.id === currentMode);
+            
+            const bulkBtn = document.getElementById('btn-bulk-action');
+            if (modeDef) {
+                bulkBtn.className = `btn-action ${modeDef.btnClass}`;
+                bulkBtn.innerHTML = `✅ 入力したものを まとめて${modeDef.btnText}`;
+            }
+
+            if (!fileHandle) {
+                const srvName = servers.find(s => s.id === currentServerId).name;
+                if (savedFileHandle) {
+                    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;">上の「🔄 前回のファイルを復元」ボタンを押して、${srvName} 用のJSONファイルを適用してください。</td></tr>`;
+                } else {
+                    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;">上のボタンから ${srvName} 用のJSONファイルを選択してください。</td></tr>`;
+                }
+                updateBulkTotal();
+                return;
+            }
+            if (inventory.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;">アイテムがありません。新規追加してください。</td></tr>`;
+                updateBulkTotal();
+                return;
+            }
+
+            tbody.innerHTML = '';
+
+            inventory.forEach((item, index) => {
+                if (currentCategory !== "すべて" && item.category !== currentCategory) return;
+
+                const categoryOptions = CATEGORIES.map(c => 
+                    `<option value="${c}" ${item.category === c ? 'selected' : ''}>${c}</option>`
+                ).join('');
+
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td><select class="category-select" onchange="updateItem(${index}, 'category', this.value)">${categoryOptions}</select></td>
+                    <td><input type="text" value="${item.name}" onchange="updateItem(${index}, 'name', this.value)" style="border:none; background:transparent; font-size:16px;"></td>
+                    <td style="display: flex; align-items: center; border-bottom: none;">
+                        <input type="text" placeholder="https://..." value="${item.url || ''}" onchange="updateItem(${index}, 'url', this.value)" style="width: 130px; padding: 5px; border: 1px solid #ccc; border-radius: 3px;">
+                        <a href="${item.url || '#'}" target="_blank" style="text-decoration: none; margin-left: 8px; font-size: 18px; opacity: ${item.url ? '1' : '0.2'}; pointer-events: ${item.url ? 'auto' : 'none'};" title="リンクを開く">🔗</a>
+                    </td>
+                    <td><input type="text" class="price-input" value="${item.price.toLocaleString()}" onfocus="this.value='${item.price}'" onchange="updateItem(${index}, 'price', this.value)"> 円</td>
+                    <td style="font-weight: bold; font-size: 18px; color: #333;">${item.stock.toLocaleString()}</td>
+                    <td><input type="number" class="input-number" id="qty-${index}" min="0" placeholder="0" oninput="calcTotal(${index})"></td>
+                    <td id="total-${index}" style="font-weight: bold; color: #0d6efd;">0円</td>
+                    <td><button class="btn-action ${modeDef.btnClass}" onclick="executeAction(${index})">${modeDef.btnText}</button></td>
+                    <td style="text-align: center;"><button class="btn-delete-item" onclick="deleteItem(${index})" title="アイテムを削除">🗑️</button></td>
+                `;
+                tbody.appendChild(tr);
+            });
+            
+            updateBulkTotal();
+        }
+
+        function calcTotal(index) {
+            const qtyStr = document.getElementById(`qty-${index}`).value;
+            const qty = Number(qtyStr.replace(/,/g, ''));
+            const price = inventory[index].price;
+            if(!isNaN(qty) && qty > 0) {
+                document.getElementById(`total-${index}`).innerText = `${(qty * price).toLocaleString()}円`;
+            } else {
+                document.getElementById(`total-${index}`).innerText = `0円`;
+            }
+            updateBulkTotal();
+        }
+
+        async function updateItem(index, key, value) {
+            if (key === 'price') {
+                value = Number(String(value).replace(/,/g, ''));
+                if (isNaN(value)) value = 0;
+            }
+            inventory[index][key] = value;
+            await saveDataToFile();
+            renderTable();
+        }
+
+        async function addNewItem() {
+            if (!fileHandle) return alert("先に管理するJSONファイルを選択してください！");
+            let newCategory = currentCategory === "すべて" ? "その他" : currentCategory;
+            inventory.push({ id: Date.now(), name: "新しいアイテム", category: newCategory, price: 0, stock: 0, url: "" });
+            await saveDataToFile();
+            renderTable();
+        }
+
+        async function deleteItem(index) {
+            if (!fileHandle) return alert("先に管理するJSONファイルを選択してください！");
+            if (confirm(`本当にアイテム「${inventory[index].name}」を削除しますか？`)) {
+                inventory.splice(index, 1);
+                await saveDataToFile();
+                renderTable();
+            }
+        }
+
+        async function executeAction(index) {
+            if (!fileHandle) return alert("先に管理するJSONファイルを選択してください！");
+
+            const item = inventory[index];
+            const qtyInput = document.getElementById(`qty-${index}`);
+            const qty = Number(String(qtyInput.value).replace(/,/g, ''));
+            const modeDef = menuTabs.find(m => m.id === currentMode);
+
+            if (isNaN(qty) || qty <= 0) return alert("実行する個数（1以上）を入力してください！");
+            if (modeDef.operation === 'sub' && item.stock < qty) return alert("在庫が足りません！");
+
+            const totalAmount = item.price * qty;
+            const oldStock = item.stock;
+
+            if (modeDef.operation === 'add') item.stock += qty;
+            else if (modeDef.operation === 'sub') item.stock -= qty;
+
+            await saveDataToFile();
+            renderTable();
+
+            const webhookUrl = document.getElementById('webhook-url').value;
+            const serverName = servers.find(s => s.id === currentServerId).name;
+
+            if (webhookUrl) {
+                const message = {
+                    embeds:[{
+                        title: `🔄[${serverName}] 在庫更新のお知らせ`,
+                        color: modeDef.operation === 'add' ? 3066993 : 15158332,
+                        fields:[
+                            { name: "アイテム名", value: `[${item.category}] ${item.name}`, inline: true },
+                            { name: "アクション", value: modeDef.actionText, inline: true },
+                            { name: "動いた個数", value: `${qty.toLocaleString()} 個`, inline: true },
+                            { name: "単価", value: `${item.price.toLocaleString()}円`, inline: true },
+                            { name: "合計金額", value: `${totalAmount.toLocaleString()}円`, inline: true },
+                            { name: "変動後の在庫", value: `${oldStock.toLocaleString()} → **${item.stock.toLocaleString()}** 個`, inline: false }
+                        ]
+                    }]
+                };
+                fetch(webhookUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(message) });
+            }
+        }
+
+        async function executeBulkAction() {
+            if (!fileHandle) return alert("先に管理するJSONファイルを選択してください！");
+
+            const modeDef = menuTabs.find(m => m.id === currentMode);
+            let targets =[];
+
+            inventory.forEach((item, index) => {
+                const input = document.getElementById(`qty-${index}`);
+                if (input) {
+                    const qty = Number(String(input.value).replace(/,/g, ''));
+                    if (!isNaN(qty) && qty > 0) {
+                        targets.push({ item: item, index: index, qty: qty });
+                    }
+                }
+            });
+
+            if (targets.length === 0) return alert("実行する個数が一つも入力されていません！");
+
+            if (modeDef.operation === 'sub') {
+                const shortage = targets.find(t => t.item.stock < t.qty);
+                if (shortage) return alert(`在庫が足りないアイテムがあります！\n(${shortage.item.name}: 残り${shortage.item.stock}個)`);
+            }
+
+            if (!confirm(`入力された ${targets.length} 件のアイテムをまとめて ${modeDef.btnText} か？`)) return;
+
+            let reportLines =[];
+            let totalAllAmount = 0;
+
+            targets.forEach(t => {
+                const totalAmount = t.item.price * t.qty;
+                totalAllAmount += totalAmount;
+                const oldStock = t.item.stock;
+
+                if (modeDef.operation === 'add') t.item.stock += t.qty;
+                else if (modeDef.operation === 'sub') t.item.stock -= t.qty;
+
+                reportLines.push(`**・[${t.item.category || 'その他'}] ${t.item.name}**\n　変動: **${t.qty.toLocaleString()}** 個 (単価 ${t.item.price.toLocaleString()}円)\n　在庫: ${oldStock.toLocaleString()} → **${t.item.stock.toLocaleString()}** 個\n　小計: ${totalAmount.toLocaleString()}円`);
+            });
+
+            await saveDataToFile();
+            renderTable();
+
+            const webhookUrl = document.getElementById('webhook-url').value;
+            const serverName = servers.find(s => s.id === currentServerId).name;
+
+            if (webhookUrl) {
+                let description = `**アクション:** ${modeDef.actionText}\n**合計金額:** ${totalAllAmount.toLocaleString()}円\n\n` + reportLines.join('\n\n');
+                
+                if (description.length > 4000) {
+                    description = description.substring(0, 3900) + '\n\n...など他多数 (文字数制限により省略されました)';
+                }
+
+                const message = {
+                    embeds:[{
+                        title: `🔄[${serverName}] 在庫一括更新のお知らせ`,
+                        color: modeDef.operation === 'add' ? 3066993 : 15158332,
+                        description: description,
+                        timestamp: new Date().toISOString()
+                    }]
+                };
+
+                try {
+                    await fetch(webhookUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(message) });
+                    alert(`まとめて ${targets.length} 件実行し、Discordへ送信しました！`);
+                } catch (e) {
+                    alert("Discordへの送信に失敗しました。");
+                }
+            } else {
+                alert(`まとめて ${targets.length} 件実行しました！\n(※Webhook未設定のためDiscord通知なし)`);
+            }
+        }
+
+        async function sendCategoryReport() {
+            if (!fileHandle) return alert("先に管理するJSONファイルを選択してください！");
+            const webhookUrl = document.getElementById('webhook-url').value;
+            if (!webhookUrl) return alert("Discord Webhook URLが設定されていません！");
+
+            const serverName = servers.find(s => s.id === currentServerId).name;
+            const categoryTotals = {};
+            
+            inventory.forEach(item => {
+                const cat = item.category || "その他";
+                if (!categoryTotals[cat]) categoryTotals[cat] = { stock: 0, count: 0, items:[] };
+                categoryTotals[cat].stock += item.stock;
+                categoryTotals[cat].count += 1;
+                categoryTotals[cat].items.push(`・${item.name}: ${item.stock.toLocaleString()} 個`);
+            });
+
+            const fields =[];
+            let totalOverallStock = 0;
+
+            CATEGORIES.forEach(cat => {
+                const data = categoryTotals[cat];
+                if (data && data.count > 0) {
+                    const itemListStr = data.items.join('\n');
+                    let fieldValue = `【合計在庫: **${data.stock.toLocaleString()}** 個】\n${itemListStr}`;
+                    if (fieldValue.length > 1000) fieldValue = fieldValue.substring(0, 990) + '\n...など他多数';
+                    fields.push({ name: `📂 ${cat}`, value: fieldValue, inline: false });
+                    totalOverallStock += data.stock;
+                }
+            });
+
+            if (fields.length === 0) return alert("集計するアイテムがありません！");
+
+            const message = {
+                embeds:[{
+                    title: `📊[${serverName}] カテゴリ別 在庫レポート`,
+                    description: `現在のカテゴリごとの詳細な在庫状況です。\n**すべての総在庫: ${totalOverallStock.toLocaleString()} 個**\n──────────`,
+                    color: 7284152, fields: fields, timestamp: new Date().toISOString()
+                }]
+            };
+
+            try {
+                const response = await fetch(webhookUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(message) });
+                if (response.ok) alert("Discordへ詳細な在庫レポートを送信しました！");
+                else alert("Discordへの送信に失敗しました。");
+            } catch (e) { alert("通信エラーが発生しました。"); }
+        }
+    </script>
+</body>
+</html>
